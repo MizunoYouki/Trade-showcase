@@ -1,0 +1,64 @@
+version: '3'
+services:
+  dataset-setup-sqlite:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile-dataset-setup-sqlite
+    image: dataset-setup-sqlite:latest
+    container_name: dataset-setup-sqlite
+    tty: true
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      SYMBOL:
+      EXCHANGE:
+      CHANNEL:
+      VERSION:
+      S3_BUCKET:
+      DESTINATION_DIRECTORY:
+
+  dataset-setup-reduced-newprices:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile-dataset-setup-reduced-newprices
+    image: dataset-setup-reduced-newprices:latest
+    container_name: dataset-setup-reduced-newprices
+    tty: true
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      TIME_WINDOW:
+      PRIMARY_DIRECTORY:
+      SECONDARY_DIRECTORY:
+      DESTINATION_DIRECTORY:
+      DATETIME_FROM:
+
+  dataset-setup-reduced-ohlc:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile-dataset-setup-reduced-ohlc
+    image: dataset-setup-reduced-ohlc:latest
+    container_name: dataset-setup-reduced-ohlc
+    tty: true
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      TIME_WINDOW:
+      SOURCE_DIRECTORY:
+      DESTINATION_DIRECTORY:
+      DATETIME_FROM:
+
+  execution-proxy-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile-execution-proxy-server
+    image: execution-proxy-server:latest
+    container_name: execution-proxy-server
+    tty: true
+    ports:
+      - "8765:8765"
+    environment:
+      WARM_UP_WINDOW:
+      SYMBOL: FXBTCJPY
+      HOST: 0.0.0.0
+      PORT: 8765

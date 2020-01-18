@@ -1,0 +1,21 @@
+FROM python:3.8.1-buster
+
+RUN set -ex && mkdir /app
+WORKDIR /app
+
+COPY Pipfile .
+COPY Pipfile.lock .
+RUN pip install --no-cache-dir pipenv
+RUN pipenv install --deploy
+
+COPY trade /app/trade
+
+RUN echo "PYTHONPATH=${PWD}" >> .env
+
+CMD [ "sh", "-c", "pipenv run python -u trade/scripts/dataset.py setup-sqlite \
+       --symbol $SYMBOL \
+       --exchange $EXCHANGE \
+       --channel $CHANNEL \
+       --version $VERSION \
+       --s3-bucket $S3_BUCKET \
+       --destination-directory $DESTINATION_DIRECTORY" ]

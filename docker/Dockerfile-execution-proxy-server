@@ -1,0 +1,21 @@
+FROM python:3.8.1-buster
+
+RUN set -ex && mkdir /app
+WORKDIR /app
+
+COPY Pipfile .
+COPY Pipfile.lock .
+RUN pip install --no-cache-dir pipenv
+RUN pipenv install --deploy
+
+EXPOSE $PORT
+
+COPY trade /app/trade
+
+RUN echo "PYTHONPATH=${PWD}" >> .env
+
+CMD [ "sh", "-c", "pipenv run python -u trade/scripts/ws_execution_proxy_server.py \
+       --warm-up-window $WARM_UP_WINDOW \
+       --symbol $SYMBOL \
+       --host $HOST \
+       --port $PORT" ]

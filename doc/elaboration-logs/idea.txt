@@ -1,0 +1,588 @@
+<Execution>
+    timestamp
+    price
+    origin {archived, cached, realtime}
+
+
+Archiver(duration) <--- DS ------
+   |                            |
+   |--- <Execution> duration ---|
+
+
+RealtimeSubscriber
+   |    Queue: LIFO execution queue
+   |      T1: Read from archiver datastore, then push to queue.
+   |          Queue blocks to append from other thread, until this thread completion.
+   |      T2: Read from WSS, then push to queue.
+   |          Appendig to queue will be blocked until T1 completion.
+   |
+   | returns: <Execution> archived + realtime
+   |
+Resampler
+   | returns: <Execution> per second
+   |
+Strategy
+   | returns: <Target> per second
+   |
+Trader
+
+
+=================================================
+
+WarmupSubscriber
+
+
+FileRetainer
+
+    main thread
+        <playback mode>
+        retainer._datastore -> (execution) -> _queue
+
+        <realtime mode>
+        retainer._subscriber -> (execution) -> _queue
+
+    fetcher-thread
+        <when duration is NOT satisfied>
+        retainer._fetcher -> (execution) -> retainer._datastore
+
+    subscriber-thread
+        <always>
+        retainer.subscriber -> (execution) -> retainer._datastore
+
+
+
+FileRetainer.start_retain()
+
+    Start to retain and to store the executions.
+    Stored file name is <id which latest in a file>.json
+
+    T1: PastSubscriber
+
+        ...
+        23:59:59.997 <oldest_exec_date>
+        23:59:59.998
+        23:59:59.999
+        00:00:00.000 <origin>
+
+    T2: RealtimeSubscriber
+
+        00:00:00.000 <origin>
+        00:00:00.001
+        00:00:00.002
+        00:00:00.003 <latest_exec_date>
+        ...
+
+    T3: (main)
+
+        # Start realtime subscriber, obtain <origin_id>.
+        # Storing file name is <latest id in a file>.json
+
+        # rt  :       o===>
+
+        # Start past subscriber.
+        # Origin is <origin_id>
+        # Maximum retaining time is <duration>
+        # Storing file name is <latest id in a file>.json
+        # past:    <--o
+        # rt  :       o===>
+
+        # When the delta reaches duration, terminate past subscriber
+        # past:  |<---o
+        # rt  :       o=====>
+
+=====================================================
+-----------------------------------------------------
+milestone: 単一strategy
+-----------------------------------------------------
+
+def invoke(self, expected: Positions):
+    """
+    要求を実行します。
+    メインスレッドで以下を順に行います。
+     - BF APIを利用して、ACTIVEな注文を取得する。
+     - BF APIを利用して、ストップロスではない注文を直列にすべてキャンセルする
+     - BF APIを利用して、ACTIVEな注文を取得して、ストップロス注文だけであることを保証する
+     - BF APIを利用して（websocketも使うかもしれない）、建玉情報の更新
+     - 新たな建玉に必要な注文を算出
+     - BF APIを利用して、新規注文する
+     - BF APIを利用して、注文が受け付けられたことを確認
+     - 約定を待つ（反対売買中、反対売買完了、約定完了）
+
+    この処理はスレッドセーフではありません。
+
+    中止シグナル？を受け取った時は、可能な限り速やかに処理が中断され、回復は行われません。
+    回復させたい場合は、回復に必要なexpectedを引数に指定して、再度このメソッドを呼び出す必要があります。
+
+    以下の状態を遷移します。
+     clearing-orders
+      |
+     making-orders
+      |
+     ordering
+      |
+     exiting
+      |
+     entering
+      |
+     entered
+
+
+    clearing-orders
+    建玉および対応するストップロス注文のみになるよう、他の注文を削除中です。
+
+        - BF APIを利用して、ACTIVEな注文を取得する。
+        - BF APIを利用して、ストップロスではない注文を直列にすべてキャンセルする
+        - BF APIを利用して、ACTIVEな注文を取得して、ストップロス注文だけであることを保証する
+
+        positions:
+            (nothing changed)
+        orders:
+            position
+            stoploss
+
+    - making-orders
+    要求を実現するのに必要な注文を算出中です。
+
+        - BF APIを利用して（websocketも使うかもしれない）、建玉情報の更新
+
+        positions:
+            (nothing changed)
+        orders:
+            (nothing changed)
+
+    - ordering
+    新規注文中です。
+
+        - BF APIを利用して、新規注文する
+        - BF APIを利用して、注文が受け付けられたことを確認する
+
+        positions:
+            (nothing changed)
+        orders:
+            (nothing changed)
+
+    - exiting / entering
+    注文が完了して、約定を待っている、あるいは約定中です。
+
+        while (expected.size != positions.size != stoploss.size):
+            - BF APIを利用して（websocketも使うかもしれない）、建玉情報の更新
+            - BF APIを利用して、ストップロスを新規追加注文する（最低注文単位に満たない場合切り捨て）
+
+        state: exiting
+        positions:   ---|--+++++
+        orders:
+            limit    ---|--+++++
+            stoploss --|---+++++
+
+        state: entering
+        positions:   -----+++|++
+        orders:
+            limit    -----+++|++
+            stoploss -----+|++++
+
+    - entered
+    要求の実現が完了した状態です。
+
+        positions:   -----+++++|
+        orders:
+            limit    -----+++++|
+            stoploss -----+++++|
+
+
+    シナリオ
+        要求が完全に約定する（long to short)
+        要求が完全に約定する（short to long)
+        要求の一部のみ約定して、長時間経つ
+        ストップロスが完全に約定する
+        ストップロスが完全に約定しない
+        REST APIが500番台
+        API Limitに達した
+
+
+    必要資金について
+    買い値と売り値が同じ場合、最大で注文価格の3倍資金が必要です。 TODO: 精査、LtoSとStoLで違うか？
+    （positionに対応するstoplossを注文する際は、position同額まで必要証拠金として加算されません？）
+
+    要求が完全に約定する（long to short)の場合、
+        clearing-orders
+        建玉および対応するストップロス注文のみになるよう、他の注文を削除中です。
+
+            required total = ￥1000
+                position = ￥1000 = 1*￥1000
+                stoploss order = ￥900 = 1*￥900
+            price: 1095
+
+            position:
+                side: buy
+                size: 1
+                price: 1000
+            order:
+                method: SIMPLE
+                    type: STOP_LIMIT
+                    side: sell
+                    size: 1
+                    trigger: 900
+                    price: 900
+
+        - making-orders
+        要求を実現するのに必要な注文を算出中です。
+
+            required deposit = (save as above)
+            price: 1095
+
+        - ordering
+        新規注文中です。
+
+            required deposit = (save as above)
+            price: 1095
+
+        - exiting / entering
+        注文が完了して、約定を待っている、あるいは約定中です。
+
+            - 注文が完了して約定が始まっていない
+                required total = ￥3200 = 1000 + 2200
+                    position = ￥1000 = 1*￥1000
+                    stoploss order = ￥900 = 1*￥900
+                    limit order = ￥2200 = 2*￥1100
+                price: 1095
+
+                position:
+                    side: buy
+                    size: 1
+                    price: 1000
+                order:
+                    method: SIMPLE
+                        type: STOP_LIMIT
+                        side: sell
+                        size: 1
+                        trigger: 900
+                        price: 900
+                    + method: SIMPLE
+                    +   type: LIMIT
+                    +   side: sell
+                    +   size: 2
+                    +   price: 1100
+
+            - 一部約定している(state: exiting)
+                required total = ￥2640 = 770 + 1870
+                    position = ￥770 = 0.7 * ￥1100
+                    stoploss order = ￥630 = 0.7 * ￥900
+                    limit order = ￥1870 = 1.7*￥1100
+                price: 1100
+                position:
+                    side: buy
+                    - size: 1
+                    + size: 0.7
+                    price: 1100
+                order:
+                    method: SIMPLE
+                        type: STOP_LIMIT
+                        side: sell
+                        - size: 1
+                        + size: 0.7
+                        trigger: 900
+                        price: 900
+                    method: SIMPLE
+                        type: LIMIT
+                        side: sell
+                        - size: 2
+                        + size: 1.7
+                        price: 1100
+
+            - 一部約定している(state: entering)
+                required total = ￥2830 = 880 + (960-880) + 1870
+                    position = ￥880 = 0.8 * ￥1100
+                    stoploss order = ￥960 = 0.8 * ￥1200
+                    limit order = ￥1870 = 1.7*￥1100
+                price: 1100
+                position:
+                    - side: buy
+                    + side: sell
+                    - size: 0.7
+                    + size: 0.8
+                    price: 1100
+                order:
+                    method: SIMPLE
+                        type: STOP_LIMIT
+                        side: sell
+                        - size: 0.7
+                        + size: 0.8
+                        trigger: 1200
+                        price: 1200
+                    method: SIMPLE
+                        type: LIMIT
+                        side: sell
+                        - size: 2
+                        + size: 1.7
+                        price: 1100
+
+        - entered
+        要求の実現が完了した状態です
+
+            required total = ￥1200 = 1100 + (1200-1100)
+                position = ￥1100 = 1*￥1100
+                stoploss order = ￥1200 = 1*￥1200
+            price: 1105
+                position:
+                    side: sell
+                    size: 1
+                    price: 1100
+                order:
+                    method: SIMPLE
+                        type: STOP_LIMIT
+                            side: buy
+                            - size: 0.21
+                            + size: 1
+                            trigger: 1200
+                            price: 1200
+
+
+# 注文前:
+# state from: (all)
+# state   to:
+# provisioning_state: ordered (other possibility states are: entered)
+#
+# (required = ￥1500 = 1*￥1000 + 1*￥500)
+# (position = ￥1000 = 1*￥1000)
+# (deposit = ￥500 = 1*￥500)
+    state: ordered
+    price: 1095
+    position:
+        side: buy
+        size: 1
+        price: 1000
+    order:
+        method: SIMPLE
+            type: STOP_LIMIT
+            side: sell
+            size: 1
+            trigger: 900
+            price: 900
+        method: SIMPLE
+            type: LIMIT
+            side: buy
+            size: 1
+            trigger: 500
+            price: 500
+
+
+# - BF APIを利用して、ACTIVEな注文を取得する。
+# state from: fetching-order
+#             canceling-order, prerequisite: XXX done
+#             fetching-position
+#             making-order
+#             ordering
+# state to: fetching-order
+
+
+# - BF APIを利用して、ストップロスではない注文を直列にすべてキャンセルする
+# - BF APIを利用して、ACTIVEな注文を取得して、ストップロス注文だけであることを保証する
+# provisioning_state: canceling-order
+#
+# (required = ￥1000 = 1*￥1000)
+# (position = ￥1000 = 1*￥1000)
+# (required deposit = ￥0)
+    price: 1095
+    position:
+        side: buy
+        size: 1
+        price: 1000
+    order:
+        method: SIMPLE
+            type: STOP_LIMIT
+            side: sell
+            size: 1
+            trigger: 900
+            price: 900
+        - method: SIMPLE
+        -     type: LIMIT
+        -     side: buy
+        -     size: 1
+        -     trigger: 500
+        -     price: 500
+
+
+# - BF APIを利用して（websocketも使うかもしれない）、建玉情報の更新
+# provisioning_state: fetching-position
+
+
+# - 新たな建玉に必要な注文を算出
+# provisioning_state: making-order
+
+
+# - BF APIを利用して、新規注文する
+# provisioning_state: ordering
+
+
+# - BF APIを利用して、注文が受け付けられたことを確認
+# provisioning_state: ordered
+#
+# (required = ￥3295)
+# (position = ￥1095 = 1*￥1095)
+# (deposit = ￥2200 = 2*￥1100)
+    price: 1095
+    position:
+        side: buy
+        size: 1
+        price: 1000
+    order:
+        + method: SIMPLE
+        +   type: LIMIT
+        +   side: sell
+        +   size: 2
+        +   price: 1100
+        method: SIMPLE
+            type: STOP_LIMIT
+            side: sell
+            size: 1
+            trigger: 900
+            price: 900
+
+
+# 約定中（反対売買中）
+# provisioning_state: exiting
+#
+# （別スレッドにおいて、BF APIを利用してposition + stoplossがゼロとなるようストップロス注文を減らしていく）
+#
+# (required = ￥2640)
+# (position = ￥770 = 0.7 * ￥1100)
+# (deposit = ￥1870 = 1.7*￥1100)
+    price: 1100
+    position:
+        side: buy
+        - size: 1
+        + size: 0.7
+        price: 1100
+    order:
+        method: SIMPLE
+            type: LIMIT
+            side: sell
+            - size: 2
+            + size: 1.7
+            price: 1100
+        method: SIMPLE
+            type: STOP_LIMIT
+            side: sell
+            - size: 1
+            + size: 0.7
+            trigger: 900
+            price: 900
+
+
+# 約定中（反対売買完了）
+# provisioning_state: entering
+#
+# (required = ￥1100)
+# (position = ￥0)
+# (deposit = ￥1100 = 1*￥1100)
+    price: 1100
+    position:
+        - side: buy
+        - size: 0.7
+        - price: 1100
+    order:
+        method: SIMPLE
+            type: LIMIT
+            side: sell
+        -     size: 1.7
+        +     size: 1
+            price: 1100
+
+
+# 約定中
+# provisioning_state: entering
+#
+# (required = ￥1100)
+# (position = ￥220 = 0.2*￥1100)
+# (deposit = ￥880 = 0.8*￥1100)
+    price: 1100
+    position:
+        + side: sell
+        + size: 0.2
+        + price: 1100
+    order:
+        method: SIMPLE
+            type: LIMIT
+            side: sell
+            - size: 1
+            + size: 0.8
+            price: 1100
+        + method: SIMPLE
+        +     type: STOP_LIMIT
+        +     side: buy
+        +     size: 0.2
+        +     trigger: 1200
+        +     price: 1200
+
+
+# 約定完了、ストップロス注文は未完
+# provisioning_state: entered
+#
+# (required = ￥1100)
+# (position = ￥1100 = 1*￥1100)
+# (deposit = ￥0)
+    price: 1105
+    position:
+        side: sell
+        - size: 0.2
+        + size: 1
+        price: 1100
+    order:
+        - method: SIMPLE
+        -    type: LIMIT
+        -    side: sell
+        -    size: 0.8
+        -    price: 1100
+        method: SIMPLE
+            type: STOP_LIMIT
+                side: buy
+                - size: 0.2
+                + size: 0.21
+                trigger: 1200
+                price: 1200
+
+
+# 約定およびストップロス注文の完了
+# provisioning_state: entered
+#
+# (required = ￥1100)
+# (position = ￥1100 = 1*￥1100)
+# (deposit = ￥0)
+    price: 1105
+    position:
+        side: sell
+        size: 1
+        price: 1100
+    order:
+        method: SIMPLE
+            type: STOP_LIMIT
+                side: buy
+                - size: 0.21
+                + size: 1
+                trigger: 1200
+                price: 1200
+
+
+-----------------------------------------------------
+TODO: milestone: 複数strategy
+-----------------------------------------------------
+-----------------------------------------------------
+"SIMPLE":
+    1 つの注文を出す特殊注文です。
+"IFD":
+    IFD 注文を行います。一度に 2 つの注文を出し、最初の注文が約定したら 2 つめの注文が自動的に発注される注文方法です。
+        entry / exit
+        entry / losscut
+"OCO":
+    OCO 注文を行います。2 つの注文を同時に出し、一方の注文が成立した際にもう一方の注文が自動的にキャンセルされる注文方法です。
+        exit / losscut
+"IFDOCO":
+    IFD-OCO 注文を行います。最初の注文が約定した後に自動的に OCO 注文が発注される注文方法です。
+        entry / (exit / losscut)
+
+
+"LIMIT": 指値注文。
+"MARKET" 成行注文。
+"STOP": ストップ注文。
+"STOP_LIMIT": ストップ・リミット注文。
+"TRAIL": トレーリング・ストップ注文。

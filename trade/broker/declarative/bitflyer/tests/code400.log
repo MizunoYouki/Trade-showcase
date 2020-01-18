@@ -1,0 +1,62 @@
+C:\Users\mizun\python-venv\trade\Scripts\python.exe C:/Users/mizun/PycharmProjects/Trade/experimental/trader/expectation/bitflyer.py
+2019-09-24 00:16:20,143: INFO:[main] waiting expectation
+2019-09-24 00:16:20,143: INFO:[main] got targets: {'FX_BTC_JPY': Target(side=Side.Buy, base_price=1000000, amount=10000)}
+2019-09-24 00:16:20,143: INFO:state: State.ClearingOrders
+2019-09-24 00:16:20,148: INFO:[proc:_clearing_orders] started <BitflyerBroker(Thread-1, started 8012)>
+2019-09-24 00:16:20,149: INFO:[client] started to send GET request: (id: 8e2a930d, url: https://api.bitflyer.com/v1/me/getchildorders, query: {'product_code': 'FX_BTC_JPY', 'child_order_state': 'ACTIVE'})
+2019-09-24 00:16:20,174: INFO:[observer] started
+2019-09-24 00:16:20,496: INFO:[client] finished to send request: (id: 8e2a930d, elapsed: 0.3472249507904053 s)
+2019-09-24 00:16:20,497: INFO:[proc:_clearing_orders] active child order: {'id': 0, 'child_order_id': 'JFX20190923-151603-957171F', 'product_code': 'FX_BTC_JPY', 'side': 'BUY', 'child_order_type': 'LIMIT', 'price': 1000000.0, 'average_price': 0.0, 'size': 0.01, 'child_order_state': 'ACTIVE', 'expire_date': '2019-10-23T15:16:03', 'child_order_date': '2019-09-23T15:16:03', 'child_order_acceptance_id': 'JRF20190923-151603-513678', 'outstanding_size': 0.01, 'cancel_size': 0.0, 'executed_size': 0.0, 'total_commission': 0.0}
+2019-09-24 00:16:20,497: INFO:[client] started to send POST request: (id: ea0120b2, url: https://api.bitflyer.com/v1/me/cancelchildorder, data: {'product_code': 'FX_BTC_JPY', 'child_order_id': 'JFX20190923-151603-957171F'})
+2019-09-24 00:16:20,698: INFO:[client] finished to send request: (id: ea0120b2, elapsed: 0.20085811614990234 s)
+2019-09-24 00:16:21,696: INFO:[proc:_clearing_orders] wait 1 second
+2019-09-24 00:16:21,696: INFO:[client] started to send GET request: (id: edcf992e, url: https://api.bitflyer.com/v1/me/getchildorders, query: {'product_code': 'FX_BTC_JPY', 'child_order_state': 'ACTIVE'})
+2019-09-24 00:16:21,874: INFO:[client] finished to send request: (id: edcf992e, elapsed: 0.17787384986877441 s)
+2019-09-24 00:16:21,874: INFO:[proc:_clearing_orders] successfully finished <BitflyerBroker(Thread-1, started 8012)>
+2019-09-24 00:16:21,874: INFO:state: State.MakingOrders
+2019-09-24 00:16:21,875: INFO:[proc:_making_orders] started <BitflyerBroker(Thread-1, started 8012)>
+2019-09-24 00:16:21,875: INFO:[client] started to send GET request: (id: f90938c5, url: https://api.bitflyer.com/v1/me/getpositions, query: {'product_code': 'FX_BTC_JPY'})
+2019-09-24 00:16:22,073: INFO:[client] finished to send request: (id: f90938c5, elapsed: 0.1978604793548584 s)
+2019-09-24 00:16:22,074: INFO:[proc:_making_orders] remote positions: SynthesizedPositions([]))
+2019-09-24 00:16:22,074: INFO:[proc:_making_orders] targets: {'FX_BTC_JPY': Target(side=Side.Buy, base_price=1000000, amount=10000)}
+2019-09-24 00:16:22,074: INFO:[proc:_making_orders] built orders: [Order(product_code='FX_BTC_JPY', child_order_type='LIMIT', side='BUY', price=1000000, size=0.01, minute_to_expire=43200, time_in_force='GTC')]
+2019-09-24 00:16:22,074: INFO:[proc:_making_orders] adapted orders: [BitflyerOrder(product_code='FX_BTC_JPY', child_order_type='LIMIT', side='BUY', price=1000000, size=0.01, minute_to_expire=43200, time_in_force='GTC')]
+2019-09-24 00:16:22,074: INFO:[proc:_making_orders] successfully finished
+2019-09-24 00:16:22,074: INFO:state: State.Ordering
+2019-09-24 00:16:22,074: INFO:[proc:_ordering] started <BitflyerBroker(Thread-1, started 8012)>
+2019-09-24 00:16:22,075: INFO:[client] started to send POST request: (id: 4287a6ae, url: https://api.bitflyer.com/v1/me/sendchildorder, data: {'product_code': 'FX_BTC_JPY', 'child_order_type': 'LIMIT', 'side': 'BUY', 'size': 0.01, 'price': 1000000, 'minute_to_expire': 43200, 'time_in_force': 'GTC'})
+2019-09-24 00:16:22,303: INFO:[client] finished to send request: (id: 4287a6ae, elapsed: 0.22884917259216309 s)
+2019-09-24 00:16:22,303: DEBUG:[proc:_ordering] code: 200, body: {'child_order_acceptance_id': 'JRF20190923-151623-780630'}
+2019-09-24 00:16:22,304: INFO:[proc:_ordering] successfully finished <BitflyerBroker(Thread-1, started 8012)>
+2019-09-24 00:16:22,304: INFO:state: State.TerminationRequired
+2019-09-24 00:16:22,304: INFO:[observer] <bound method BitflyerBroker._observer of <BitflyerBroker(Thread-1, started 8012)>> observes new expectation, terminating me
+2019-09-24 00:16:22,306: INFO:[main] "{'FX_BTC_JPY': Target(side=Side.Buy, base_price=1000000, amount=10000)}" is now OOD, reset the state to empty
+2019-09-24 00:16:22,306: INFO:state: State.Empty
+2019-09-24 00:16:22,306: INFO:[main] waiting expectation
+2019-09-24 00:16:22,306: INFO:[main] got targets: {'FX_BTC_JPY': Target(side=Side.Sell, base_price=1500000, amount=15000)}
+2019-09-24 00:16:22,306: INFO:state: State.ClearingOrders
+2019-09-24 00:16:22,309: INFO:[proc:_clearing_orders] started <BitflyerBroker(Thread-1, started 8012)>
+2019-09-24 00:16:22,309: INFO:[client] started to send GET request: (id: a27e9d9c, url: https://api.bitflyer.com/v1/me/getchildorders, query: {'product_code': 'FX_BTC_JPY', 'child_order_state': 'ACTIVE'})
+2019-09-24 00:16:22,313: INFO:[observer] started
+2019-09-24 00:16:22,497: INFO:[client] finished to send request: (id: a27e9d9c, elapsed: 0.18790936470031738 s)
+2019-09-24 00:16:22,498: INFO:[proc:_clearing_orders] active child order does not exist
+2019-09-24 00:16:22,498: INFO:[proc:_clearing_orders] successfully finished <BitflyerBroker(Thread-1, started 8012)>
+2019-09-24 00:16:22,498: INFO:state: State.MakingOrders
+2019-09-24 00:16:22,498: INFO:[proc:_making_orders] started <BitflyerBroker(Thread-1, started 8012)>
+2019-09-24 00:16:22,498: INFO:[client] started to send GET request: (id: 27e4509b, url: https://api.bitflyer.com/v1/me/getpositions, query: {'product_code': 'FX_BTC_JPY'})
+2019-09-24 00:16:22,720: INFO:[client] finished to send request: (id: 27e4509b, elapsed: 0.22184371948242188 s)
+2019-09-24 00:16:22,721: INFO:[proc:_making_orders] remote positions: SynthesizedPositions([]))
+2019-09-24 00:16:22,721: INFO:[proc:_making_orders] targets: {'FX_BTC_JPY': Target(side=Side.Sell, base_price=1500000, amount=15000)}
+2019-09-24 00:16:22,721: INFO:[proc:_making_orders] built orders: [Order(product_code='FX_BTC_JPY', child_order_type='LIMIT', side='SELL', price=1500000, size=0.01, minute_to_expire=43200, time_in_force='GTC')]
+2019-09-24 00:16:22,721: INFO:[proc:_making_orders] adapted orders: [BitflyerOrder(product_code='FX_BTC_JPY', child_order_type='LIMIT', side='SELL', price=1500000, size=0.01, minute_to_expire=43200, time_in_force='GTC')]
+2019-09-24 00:16:22,721: INFO:[proc:_making_orders] successfully finished
+2019-09-24 00:16:22,721: INFO:state: State.Ordering
+2019-09-24 00:16:22,721: INFO:[proc:_ordering] started <BitflyerBroker(Thread-1, started 8012)>
+2019-09-24 00:16:22,722: INFO:[client] started to send POST request: (id: b6b777c7, url: https://api.bitflyer.com/v1/me/sendchildorder, data: {'product_code': 'FX_BTC_JPY', 'child_order_type': 'LIMIT', 'side': 'SELL', 'size': 0.01, 'price': 1500000, 'minute_to_expire': 43200, 'time_in_force': 'GTC'})
+2019-09-24 00:16:22,922: INFO:[client] finished to send request: (id: b6b777c7, elapsed: 0.20130014419555664 s)
+2019-09-24 00:16:22,923: DEBUG:[proc:_ordering] code: 400, body: {'status': -205, 'error_message': 'Margin amount is insufficient for this order.', 'data': None}
+2019-09-24 00:16:22,923: INFO:[proc:_ordering] successfully finished <BitflyerBroker(Thread-1, started 8012)>
+2019-09-24 00:16:22,923: INFO:state: State.TerminationRequired
+2019-09-24 00:16:22,925: INFO:[main] termination required, started to exit thread
+
+Process finished with exit code 0

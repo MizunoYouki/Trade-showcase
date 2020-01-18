@@ -1,0 +1,12 @@
+.idea
+.credentials
+.ipynb_checkpoints
+__pycache__
+dashboard/*
+!dashboard/sandbox.*
+!dashboard/random-doten.*
+!dashboard/html
+simulation/*
+!simulation/sandbox.*
+!simulation/random-doten.*
+keys
